@@ -47,6 +47,7 @@ class StatmapSession {
         this.name = name; this.a = a; this.b = b;
         this.done = -1; this.inS = false; this.cur = null; this.prior = null;
         this.H = { manip: [], dist: [], up: [], dn: [], range: [], type: [], close: [], open: [] };
+        this.cnt = { am: 0, bm: 0, ad: 0, bd: 0 };
         this.stats = { Mu: [], Md: [], Du: [], Dd: [], prior: [] };
         this.lv = null;
     }
@@ -80,7 +81,18 @@ class StatmapSession {
         if (type !== 0) {
             H.manip.push(type === 1 ? S.o - S.l : S.h - S.o); H.dist.push(type === 1 ? S.h - S.o : S.o - S.l);
             H.up.push(S.h - S.o); H.dn.push(S.o - S.l); H.range.push(S.h - S.l); H.type.push(type); H.close.push(S.c); H.open.push(S.o);
-            for (const k of Object.keys(H)) if (H[k].length > p.histSessions) H[k].shift();
+            // running "% closes beyond" counts, kept exactly as the Pine does: a session is counted against the mean
+            // that includes it at its own close, and uncounted (if still beyond) against the mean left after removal
+            const C = this.cnt, aM = mean(H.manip), aD = mean(H.dist);
+            if (S.c > S.o + aM) C.am++; if (S.c < S.o - aM) C.bm++;
+            if (S.c > S.o + aD) C.ad++; if (S.c < S.o - aD) C.bd++;
+            if (H.type.length > p.histSessions) {
+                const oc = H.close[0], oo = H.open[0];
+                for (const k of Object.keys(H)) H[k].shift();
+                const hM = mean(H.manip), hD = mean(H.dist);
+                if (oc > oo + hM) C.am = Math.max(0, C.am - 1); if (oc < oo - hM) C.bm = Math.max(0, C.bm - 1);
+                if (oc > oo + hD) C.ad = Math.max(0, C.ad - 1); if (oc < oo - hD) C.bd = Math.max(0, C.bd - 1);
+            }
         }
         this.prior = S;
     }
@@ -153,12 +165,8 @@ class StatmapSession {
         }
         if (p.showTable) {
             const H = this.H, n = H.type.length, aM = mean(H.manip), aD = mean(H.dist);
-            let am = 0, bm = 0, ad = 0, bd = 0;
-            for (let k = 0; k < n; k++) {                                  // closes beyond the CURRENT mean levels
-                if (H.close[k] > H.open[k] + aM) am++; if (H.close[k] < H.open[k] - aM) bm++;
-                if (H.close[k] > H.open[k] + aD) ad++; if (H.close[k] < H.open[k] - aD) bd++;
-            }
-            const f = v => n ? (100 * v / n).toFixed(2) + "%" : "–", r = v => v.length ? (100 * v.filter(Boolean).length / v.length).toFixed(0) + "%" : "–";
+            const { am, bm, ad, bd } = this.cnt;                            // Pine's running counts (see endSession)
+            const f = v => n ? Math.max(0, Math.min(100, 100 * v / n)).toFixed(2) + "%" : "–", r = v => v.length ? (100 * v.filter(Boolean).length / v.length).toFixed(0) + "%" : "–";
             const pad = (x, w) => { x = String(x); return x.length >= w ? x.slice(0, w) : x + " ".repeat(w - x.length); };
             const rng = H.range, z = rng.length > 1 ? (rng[rng.length - 1] - mean(rng)) / stdev(rng) : NaN;
             const rows = [pad(this.name + " (" + String(Math.floor(this.a / 60)).padStart(2, "0") + String(this.a % 60).padStart(2, "0") + "-" +
@@ -171,6 +179,7 @@ class StatmapSession {
                 pad("Prior untested levels hit next", 34) + r(this.stats.prior) + "  (" + this.stats.prior.length + ")",
                 pad("Chart bars loaded", 34) + (this.nBars || 0) + "   sessions found " + n];
             if (!n) rows.push("No completed session in the loaded history yet - scroll the chart left to load more days");
+            else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions in the loaded history - scroll left to load more; levels will differ from TradingView until then");
             rows.forEach((t, k) => items.push({ tag: "Text", key: "P" + k, global: true, origin: { cs: "frame", h: p.tableLeft ? "left" : "right", v: p.tableTop ? "top" : "bottom" },
                 point: { x: px(p.tableLeft ? 10 : -10), y: px(p.tableTop ? 14 + k * (p.tableFont + 5) : -(14 + (rows.length - 1 - k) * (p.tableFont + 5))) },
                 text: t, style: { fontSize: p.tableFont, fill: k === 0 ? p.colTableHead : p.colTable, fontFamily: "monospace, Courier New" },

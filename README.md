@@ -43,9 +43,13 @@ your setup.
   the NQ reference figures by distance band (what the Pine shows until its own sample fills), marked "·".
   Not ported either: HTF moving averages (MAs use the chart timeframe), previous-year H/L, the 9 extra
   MA types (EMA / SMA / WMA / RMA kept), alerts.
-- Statmap Session: "% Session Closes Above/Below" is computed against the CURRENT mean levels over all
-  stored sessions (the Pine updates its counts incrementally with the mean at each session's end, so
-  the two can differ by a few percent). The Pine's "Auto" session is reproduced as written: its first
+- Statmap Session: checked against TradingView (Asia session, 75 sessions, NQ 5m, 27 Nov 2026): every level
+  within a point or two, bullish/bearish counts identical, and the "% Session Closes Above/Below" rows
+  identical (29.33 / 38.67 / 16.00 / 20.00) once the history starts where TradingView's does. Those four
+  rows use the Pine's running counts, which depend on where the chart's history starts - so they can differ
+  from TradingView if Tradovate has loaded more or less history. The levels don't have this issue: they
+  only use the last N sessions, but **N sessions must be loaded** (the panel warns when fewer are).
+  The Pine's "Auto" session is reproduced as written: its first
   test (00:00-17:00) catches every daytime hour, so Auto never selects London / NY - pick the session.
 - Added (switch off to match the Pine): prior candle / session untested levels; hit-rate rows;
   `likeForLike` (HTF lookback of the same slot only, off by default = Pine behaviour); `extendToNow`
