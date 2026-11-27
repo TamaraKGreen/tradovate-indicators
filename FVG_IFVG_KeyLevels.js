@@ -295,7 +295,7 @@ class FvgIfvgKl {
                 lines: [{ tag: "Line", a: { x: du(xa), y: du(y) }, b: { x: du(i + p.lvlExt), y: du(y) } }],
                 lineStyle: { lineWidth: p.lvlWidth, color: col, lineStyle: DASH[sty] || 1 } });
             if (p.labShow) items.push({ tag: "Text", key: "T" + key, global: true, point: { x: du(i + p.labOff), y: du(y) },
-                text: txt + (p.labPrice ? "  " + y.toFixed(2) : ""), style: { fontSize: fs, fill: col }, textAlignment: "leftMiddle" });
+                text: txt + (p.labPrice ? "  " + y.toFixed(2) : ""), style: { fontSize: fs, fill: col }, textAlignment: "rightMiddle" });
         };
         const rect = (key, x1, x2, top, bot, fill, opac, border) => {
             const pts = [{ x: du(x1), y: du(top) }, { x: du(x2), y: du(top) }, { x: du(x2), y: du(bot) }, { x: du(x1), y: du(bot) }];
@@ -316,8 +316,8 @@ class FvgIfvgKl {
         level("do", p.showDO, this.dOpen, this.dOpenBi, "Daily Open", p.colDO, p.styDO);
         level("wo", p.showWO, this.wOpen, this.wOpenBi, "Weekly Open", p.colWO, p.styWO);
         level("pdv", p.showPDV, this.vw.pd, this.dOpenBi, "Prev D VWAP", p.colDV, "Dotted");
-        if (p.labShow && isFinite(liveVals.dVwap)) items.push({ tag: "Text", key: "TdV", global: true, point: { x: du(i + p.labOff), y: du(liveVals.dVwap) }, text: "D VWAP", style: { fontSize: fs, fill: p.colDV }, textAlignment: "leftMiddle" });
-        if (p.labShow && isFinite(liveVals.wVwap)) items.push({ tag: "Text", key: "TwV", global: true, point: { x: du(i + p.labOff), y: du(liveVals.wVwap) }, text: "W VWAP", style: { fontSize: fs, fill: p.colWV }, textAlignment: "leftMiddle" });
+        if (p.labShow && isFinite(liveVals.dVwap)) items.push({ tag: "Text", key: "TdV", global: true, point: { x: du(i + p.labOff), y: du(liveVals.dVwap) }, text: "D VWAP", style: { fontSize: fs, fill: p.colDV }, textAlignment: "rightMiddle" });
+        if (p.labShow && isFinite(liveVals.wVwap)) items.push({ tag: "Text", key: "TwV", global: true, point: { x: du(i + p.labOff), y: du(liveVals.wVwap) }, text: "W VWAP", style: { fontSize: fs, fill: p.colWV }, textAlignment: "rightMiddle" });
         // opening gaps
         if (p.showNDOG) this.ndog.forEach((g, k) => rect("nd" + k, g.bi - 1, right + p.lvlExt, g.top, g.bot, p.colGap, 0.25, false));
         if (p.showNWOG) this.nwog.forEach((g, k) => rect("nw" + k, g.bi - 1, right + p.lvlExt, g.top, g.bot, p.colWGap, 0.3, false));
@@ -343,7 +343,7 @@ class FvgIfvgKl {
                 const rk = rank.get(g);
                 items.push({ tag: "Text", key: "Zt" + k, global: true, point: { x: du(right), y: du((g.top + g.bot) / 2) },
                     text: (p.tblLink && rk ? "#" + rk + "  " : "") + g.slot.label + (g.inv ? " IFVG" : " FVG") + (actBull ? " ↑" : " ↓"),
-                    style: { fontSize: fs, fill: col }, textAlignment: "rightMiddle" });
+                    style: { fontSize: fs, fill: col }, textAlignment: "leftMiddle" });
             }
         });
         // stats panel (top-right, monospace text lines)
@@ -387,7 +387,7 @@ class FvgIfvgKl {
                 origin: { cs: "frame", h: p.tblLeft ? "left" : "right", v: "top" },
                 point: { x: px(p.tblLeft ? 10 : -10), y: px(14 + k * (p.tblFont + 5)) }, text: t,
                 style: { fontSize: p.tblFont, fill: k === 0 ? p.tblHeader : p.tblText, fontFamily: "monospace, Courier New" },
-                textAlignment: p.tblLeft ? "leftBelow" : "rightBelow" }));
+                textAlignment: p.tblLeft ? "rightBelow" : "leftBelow" }));
         }
         return items;
     }

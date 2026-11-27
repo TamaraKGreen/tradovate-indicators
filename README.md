@@ -13,6 +13,19 @@
    The Statmaps work on 1-minute to 15-minute charts.
 4. Load enough history: the FVG percentiles need ~40 zones per timeframe, the 200 EMA ~200 bars,
    Statmap lookbacks N candles of the chosen timeframe (60 x 4H = ~10 trading days of 1m bars).
+   **The Statmaps draw no levels until at least one full session / candle has finished inside the loaded
+   history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
+   if it says 0, scroll the chart left (Tradovate loads more history as you scroll) and the levels appear.
+5. Session Statmap, **Custom** session: set *Start Hour / Start Minute / End Hour / End Minute*
+   (New York time, 24-hour clock, e.g. 9 / 30 / 11 / 0 for 09:30-11:00; overnight sessions like
+   20:00-02:00 work).
+
+## If something doesn't draw: `dev/Layout_Test.js`
+A small diagnostic indicator. Load it like the others and send a screenshot: it shows which text
+alignments are readable in each corner, whether lines anchored by bar index draw, how many bars the
+indicator received (with first/last bar time), and whether a text-type setting appears in the settings
+dialog. Tradovate's documentation doesn't pin these down, so this is the quickest way to check them on
+your setup.
 
 ## How these differ from the Pine versions
 - Tradovate indicators only see the chart's own bars, so higher-timeframe candles (5m/15m/60m FVG bars,
@@ -21,6 +34,9 @@
 - All times are New York; daylight saving is computed in the code, so the chart's timezone setting
   does not matter.
 - Tradovate has no table object: tables are drawn as monospace text panels pinned to a chart corner.
+  In Tradovate's text alignment, `rightMiddle` places the text to the *right* of its anchor point and
+  `leftMiddle` to the *left* (the first versions had this backwards, which pushed the right-hand panels
+  off the chart under the price scale - fixed).
 - Drawings are recalculated on each new bar and refreshed on the forming bar; levels from the forming
   bar's own high/low appear once that bar closes.
 - FVG indicator: the per-chart learned RETEST / DEPTH / THROUGH columns are not ported; the panel shows
@@ -37,6 +53,6 @@
 
 ## Checked
 `dev/harness.js` runs an indicator outside Tradovate (stubs for Tradovate's `tools/graphics`, real
-`tools/predef` from github.com/tradovate/custom-indicators). On NQ 1-minute bars Oct-Nov 2026 all three
+`tools/predef` from github.com/tradovate/custom-indicators). On NQ 1-minute and 15-minute bars Oct-Nov 2026 all three
 run without errors (< 0.3 s for 54k bars) and the FVG engine finds exactly the same 5m/15m/60m gaps as
 the Python port of the Pine engine used in the research.

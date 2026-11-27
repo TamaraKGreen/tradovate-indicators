@@ -134,7 +134,7 @@ class StatmapHTF {
             if (!isFinite(y)) return;
             items.push({ tag: "LineSegments", key: "L" + key, global: true, lines: [{ tag: "Line", a: { x: du(x1), y: du(y) }, b: { x: du(x2), y: du(y) } }],
                 lineStyle: { lineWidth: w, color: col, lineStyle: DASH[sty] || 1 } });
-            if (txt && p.showLabels) items.push({ tag: "Text", key: "T" + key, global: true, point: { x: du(x2), y: du(y) }, text: " " + txt, style: { fontSize: fs, fill: col }, textAlignment: "leftMiddle" });
+            if (txt && p.showLabels) items.push({ tag: "Text", key: "T" + key, global: true, point: { x: du(x2), y: du(y) }, text: " " + txt, style: { fontSize: fs, fill: col }, textAlignment: "rightMiddle" });
         };
         const shade = (key, x1, x2, a, b, col) => {
             if (!isFinite(a) || !isFinite(b)) return;
@@ -152,7 +152,7 @@ class StatmapHTF {
             if (p.showAnchor) {
                 items.push({ tag: "LineSegments", key: "A" + n, global: true, lines: [{ tag: "Line", a: { x: du(x1), y: du(L.aL) }, b: { x: du(x1), y: du(L.aH) } }],
                     lineStyle: { lineWidth: 1, color: p.colAnchor, lineStyle: 5 } });
-                if (p.showLabels) items.push({ tag: "Text", key: "At" + n, global: true, point: { x: du(x1), y: du(L.Du) }, text: "Start " + tf, style: { fontSize: fs, fill: p.colAnchor }, textAlignment: "rightAbove" });
+                if (p.showLabels) items.push({ tag: "Text", key: "At" + n, global: true, point: { x: du(x1), y: du(L.Du) }, text: "Start " + tf, style: { fontSize: fs, fill: p.colAnchor }, textAlignment: "centerAbove" });
             }
             if (p.showOpen) line("o" + n, x1, x2, L.open, p.colOpen, p.styOpen, 1, "Open " + tf);
             if (p.showManip) { line("mu" + n, x1, x2, L.Mu, col, p.styManip, p.width, "-M " + tf); line("md" + n, x1, x2, L.Md, col, p.styManip, p.width, "+M " + tf); }
@@ -193,7 +193,7 @@ class StatmapHTF {
             rows.forEach((t, k2) => items.push({ tag: "Text", key: "P" + k2, global: true, origin: { cs: "frame", h: p.panelLeft ? "left" : "right", v: p.panelTop ? "top" : "bottom" },
                 point: { x: px(p.panelLeft ? 10 : -10), y: px(p.panelTop ? 14 + k2 * (p.panelFont + 5) : -(14 + (rows.length - 1 - k2) * (p.panelFont + 5))) },
                 text: t, style: { fontSize: p.panelFont, fill: k2 === 0 ? p.colPanelHead : p.colPanel, fontFamily: "monospace, Courier New" },
-                textAlignment: p.panelLeft ? "leftMiddle" : "rightMiddle" }));
+                textAlignment: p.panelLeft ? "rightMiddle" : "leftMiddle" }));
         }
         return items;
     }

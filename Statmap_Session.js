@@ -11,7 +11,7 @@
 //   average range). New York clock, DST handled internally.
 //
 // Sessions: NY RTH 09:30-16:00, NY Futures 08:00-17:00, London 02:00-08:00, Asia 19:00-02:00,
-// Midnight-17:00, Custom (HHMM-HHMM), Auto.
+// Midnight-17:00, Custom (start/end hour and minute), Auto.
 // NOTE on Auto: in the Pine the first test (00:00-17:00) catches every daytime hour, so Auto only
 // ever returns "Midnight to 5pm" (00:00-17:00), "Asia" (19:00-02:00) or RTH (17:00-19:00). That
 // behaviour is kept here so both match; pick a session explicitly if you want London / NY.
@@ -39,7 +39,7 @@ class StatmapSession {
     init() {
         const p = this.props;
         let name, a, b;
-        if (p.session === "custom") { name = "Custom"; a = hhmm(p.customStart); b = hhmm(p.customEnd); }
+        if (p.session === "custom") { name = "Custom"; a = (p.startHour % 24) * 60 + (p.startMinute % 60); b = (p.endHour % 24) * 60 + (p.endMinute % 60); }
         else if (p.session === "auto") {
             const m = nyMod(Date.now());                                    // same branch order as the Pine
             [name, a, b] = m < 1020 ? ["Midnight to 5pm", 0, 1020] : (m >= 1140 || m < 120) ? ["Asia", 1140, 120] : ["New York RTH", 570, 960];
@@ -88,17 +88,19 @@ class StatmapSession {
     commit(e, i) {
         const mod = nyMod(e.timestamp().getTime());
         const inS = this.inSession(mod);
-        if (inS && !this.inS) this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: i, lv: this.levelsFrom(e.open()) };
+        const xi = typeof e.index === "function" ? e.index() : i;
+        if (inS && !this.inS) this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: xi, lv: this.levelsFrom(e.open()),
+            partial: i === 0 && mod !== this.a };                            // history starts mid-session: wrong open, skip it
         else if (inS && this.cur) { this.cur.h = Math.max(this.cur.h, e.high()); this.cur.l = Math.min(this.cur.l, e.low()); this.cur.c = e.close(); }
-        if (!inS && this.inS && this.cur) { this.endSession(this.cur); this.cur = null; }
+        if (!inS && this.inS && this.cur) { if (!this.cur.partial) this.endSession(this.cur); this.cur = null; }
         this.inS = inS;
-        this.done = i;
+        this.done = i; this.nBars = i + 1;
     }
 
     map(d, index, series) {
         for (let k = this.done + 1; k < index; k++) this.commit(series.get(k), k);
         if (index !== series.size() - 1) return {};
-        return { graphics: { items: this.draw(index, d) } };
+        return { graphics: { items: this.draw(typeof d.index === "function" ? d.index() : index, d) } };
     }
 
     draw(i, d) {
@@ -112,7 +114,7 @@ class StatmapSession {
             if (!isFinite(y)) return;
             items.push({ tag: "LineSegments", key: "L" + key, global: true, lines: [{ tag: "Line", a: { x: du(x1), y: du(y) }, b: { x: du(x2), y: du(y) } }],
                 lineStyle: { lineWidth: w, color: col, lineStyle: DASH[sty] || 1 } });
-            if (p.showLabels && txt) items.push({ tag: "Text", key: "T" + key, global: true, point: { x: du(x2), y: du(y) }, text: " " + txt, style: { fontSize: fs, fill: col }, textAlignment: "leftMiddle" });
+            if (p.showLabels && txt) items.push({ tag: "Text", key: "T" + key, global: true, point: { x: du(x2), y: du(y) }, text: " " + txt, style: { fontSize: fs, fill: col }, textAlignment: "rightMiddle" });
         };
         const shade = (key, a, b, col, x1, x2) => {
             if (!isFinite(a) || !isFinite(b)) return;
@@ -125,7 +127,7 @@ class StatmapSession {
             if (p.showAnchor) {
                 items.push({ tag: "LineSegments", key: "A", global: true, lines: [{ tag: "Line", a: { x: du(x1), y: du(L.eD) }, b: { x: du(x1), y: du(L.eU) } }],
                     lineStyle: { lineWidth: 1, color: p.colAnchor, lineStyle: 5 } });
-                if (p.showLabels) items.push({ tag: "Text", key: "At", global: true, point: { x: du(x1), y: du(L.eU) }, text: "Session Start", style: { fontSize: fs, fill: p.colAnchor }, textAlignment: "rightAbove" });
+                if (p.showLabels) items.push({ tag: "Text", key: "At", global: true, point: { x: du(x1), y: du(L.eU) }, text: "Session Start", style: { fontSize: fs, fill: p.colAnchor }, textAlignment: "centerAbove" });
             }
             if (p.showOpen) line("o", L.open, p.colOpen, p.styOpen, 1, "Session Open", x1, x2);
             if (p.showManip) { line("mu", L.Mu, p.colManip, p.styManip, p.width, "-M", x1, x2); line("md", L.Md, p.colManip, p.styManip, p.width, "+M", x1, x2); }
@@ -166,11 +168,13 @@ class StatmapSession {
                 pad("% Session Closes Above Dist", 34) + f(ad), pad("% Session Closes Below Dist", 34) + f(bd),
                 pad("Avg Session Range", 34) + (isFinite(mean(rng)) ? mean(rng).toFixed(2) : "–") + (isFinite(z) ? "   last z " + z.toFixed(2) : ""),
                 pad("Hit rate -M / +M / +D / -D", 34) + [r(this.stats.Mu), r(this.stats.Md), r(this.stats.Du), r(this.stats.Dd)].join(" / ") + "  (" + this.stats.Mu.length + ")",
-                pad("Prior untested levels hit next", 34) + r(this.stats.prior) + "  (" + this.stats.prior.length + ")"];
+                pad("Prior untested levels hit next", 34) + r(this.stats.prior) + "  (" + this.stats.prior.length + ")",
+                pad("Chart bars loaded", 34) + (this.nBars || 0) + "   sessions found " + n];
+            if (!n) rows.push("No completed session in the loaded history yet - scroll the chart left to load more days");
             rows.forEach((t, k) => items.push({ tag: "Text", key: "P" + k, global: true, origin: { cs: "frame", h: p.tableLeft ? "left" : "right", v: p.tableTop ? "top" : "bottom" },
                 point: { x: px(p.tableLeft ? 10 : -10), y: px(p.tableTop ? 14 + k * (p.tableFont + 5) : -(14 + (rows.length - 1 - k) * (p.tableFont + 5))) },
                 text: t, style: { fontSize: p.tableFont, fill: k === 0 ? p.colTableHead : p.colTable, fontFamily: "monospace, Courier New" },
-                textAlignment: p.tableLeft ? "leftMiddle" : "rightMiddle" }));
+                textAlignment: p.tableLeft ? "rightMiddle" : "leftMiddle" }));
         }
         return items;
     }
@@ -189,7 +193,8 @@ module.exports = {
     areaChoice: "overlay",
     tags: ["Custom"],
     params: {
-        session: S.enum(SO, "rth"), customStart: S.text("0900"), customEnd: S.text("1200"), histSessions: S.number(60, 1, 1),
+        session: S.enum(SO, "rth"), startHour: S.number(9, 1, 0), startMinute: S.number(0, 5, 0), endHour: S.number(12, 1, 0), endMinute: S.number(0, 5, 0),
+        histSessions: S.number(60, 1, 1),
         showAnchor: S.bool(true), colAnchor: S.color("#9e9e9e"),
         showOpen: S.bool(true), colOpen: S.color("#bdbdbd"), styOpen: S.enum(STY, "Solid"),
         showManip: S.bool(true), colManip: S.color("#ef5350"), styManip: S.enum(STY, "Dotted"),
