@@ -91,7 +91,10 @@ class StatmapSession {
         // built-in history: replay it through the same session logic, oldest first
         this.builtin = []; this.lastBuiltin = -Infinity; this.nChart = 0;
         const key = Object.keys(SESS).find(k => hhmm(SESS[k][1]) === a && hhmm(SESS[k][2]) === b);
-        const rows = p.statsSource === "builtin" && key && BUILTIN.sessions[key];
+        // the built-in history is NQ; Micro NQ trades at the same prices. Anything else uses the chart only.
+        const prod = String((this.contractInfo && this.contractInfo.product) || "").toUpperCase();
+        this.nqOnly = !!prod && prod !== "NQ" && prod !== "MNQ";
+        const rows = p.statsSource === "builtin" && !this.nqOnly && key && BUILTIN.sessions[key];
         if (rows && rows.length) {
             for (const [tm, o, h, l, c] of rows) {
                 const S = { o, h, l, c, t: tm * 60000, bi: NaN, lv: this.levelsFrom(o), builtin: true };
@@ -242,7 +245,8 @@ class StatmapSession {
                 rows.push("Gap: sessions between " + nyDate(this.lastBuiltin) + " and " + nyDate(this.firstChart) + " are missing - refresh the built-in history");
             else if (this.builtin.length && this.firstChart === undefined && (this.nBars || 0) > 0 && d.timestamp().getTime() - this.lastBuiltin > 4 * 86400000)
                 rows.push("Built-in history ends " + nyDate(this.lastBuiltin) + " - refresh it (sessions since then aren't on the chart)");
-            if (!n) {} else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions available" + (this.builtin.length ? "" : " - scroll left to load more, or use a preset session with built-in history"));
+            if (!n) {} else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions available" + (this.builtin.length ? "" :
+                this.nqOnly ? " - built-in history is NQ/MNQ only; scroll left to load more" : " - scroll left to load more, or use a preset session with built-in history"));
             rows.forEach((t, k) => items.push({ tag: "Text", key: "P" + k, global: true, origin: { cs: "frame", h: p.tableLeft ? "left" : "right", v: p.tableTop ? "top" : "bottom" },
                 point: { x: px(p.tableLeft ? 10 : -10), y: px(p.tableTop ? 14 + k * (p.tableFont + 5) : -(14 + (rows.length - 1 - k) * (p.tableFont + 5))) },
                 text: t, style: { fontSize: p.tableFont, fill: k === 0 ? p.colTableHead : p.colTable, fontFamily: "monospace, Courier New" },

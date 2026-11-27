@@ -15,7 +15,9 @@
    Statmap lookbacks N candles of the chosen timeframe (60 x 4H = ~10 trading days of 1m bars).
    **Session Statmap carries its own history:** the preset sessions (Asia, London, NY RTH, NY Futures,
    Midnight-5pm, Globex Day 18:00-16:00, and custom sessions with the same times) include the last 300 NQ
-   sessions built in, so the levels are right even when Tradovate loads only a few days. Newer sessions on
+   sessions built in, so the levels are right even when Tradovate loads only a few days. The built-in
+   history is **NQ only** (used on NQ and MNQ charts); on any other product the indicator uses the chart's
+   own history. Newer sessions on
    the chart are added on top automatically. Set *Stats Source* to "Chart history only" to ignore it. The
    built-in history is refreshed with `dev/build_session_history.py` (see the top of that file). The chart
    has to reach back to where the built-in history ends; if it doesn't (e.g. a chart that loads 3 days and a
