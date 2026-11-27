@@ -212,8 +212,8 @@ class StatmapSession {
                 pad("Hit rate -M / +M / +D / -D", 34) + [r(this.stats.Mu), r(this.stats.Md), r(this.stats.Du), r(this.stats.Dd)].join(" / ") + "  (" + this.stats.Mu.length + ")",
                 pad("Prior untested levels hit next", 34) + r(this.stats.prior) + "  (" + this.stats.prior.length + ")",
                 pad("Chart bars loaded", 34) + (this.nBars || 0) + "   sessions found " + n];
-            if (!n) rows.push("No completed session in the loaded history yet - double-click a candle and raise the number of bars loaded");
-            else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions in the loaded history - double-click a candle and raise the number of bars loaded");
+            if (!n) rows.push("No completed session in the loaded history yet - scroll the chart back to load more");
+            else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions loaded - scroll the chart back until it reaches " + p.histSessions);
             rows.forEach((t, k) => items.push({ tag: "Text", key: "P" + k, global: true, origin: { cs: "frame", h: p.tableLeft ? "left" : "right", v: p.tableTop ? "top" : "bottom" },
                 point: { x: px(p.tableLeft ? 10 : -10), y: px(p.tableTop ? 14 + k * (p.tableFont + 5) : -(14 + (rows.length - 1 - k) * (p.tableFont + 5))) },
                 text: t, style: { fontSize: p.tableFont, fill: k === 0 ? p.colTableHead : p.colTable, fontFamily: "monospace, Courier New" },

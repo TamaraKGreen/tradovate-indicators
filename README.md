@@ -15,8 +15,9 @@
    Statmap lookbacks N candles of the chosen timeframe (60 x 4H = ~10 trading days of 1m bars).
    **The Statmaps draw no levels until at least one full session / candle has finished inside the loaded
    history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
-   if it's below the lookback, **double-click a candle on the chart (Chart Editor) and raise "Minimum number
-   of bars to load"**. Each 18:00-16:00 session is ~264 bars on a 5-minute chart, ~88 on 15-minute, ~44 on
+   if it's below the lookback, **scroll the chart back** until "sessions found" reaches it - the indicator
+   recalculates as Tradovate loads the older bars, and you can zoom back in afterwards. (Raising "Minimum number
+   of bars to load" in the Chart Editor - double-click a candle - didn't give the indicator more bars in testing.) Each 18:00-16:00 session is ~264 bars on a 5-minute chart, ~88 on 15-minute, ~44 on
    30-minute, so 60 sessions needs ~16,000 / ~5,300 / ~2,700 bars. The levels are the same on any of these
    timeframes, so a 15- or 30-minute chart is the easy way to get a full lookback.
    Sessions are split at each session start time even when there are no bars in between (holiday halts such
