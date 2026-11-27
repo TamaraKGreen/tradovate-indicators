@@ -15,6 +15,9 @@
    Statmap lookbacks N candles of the chosen timeframe (60 x 4H = ~10 trading days of 1m bars).
    **The Statmaps draw no levels until at least one full session / candle has finished inside the loaded
    history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
+   **Statmap HTF remembers candles the same way**, per timeframe; its panel ends with a "Candles" row per
+   timeframe ("N from chart + M remembered", and how many short of the lookback it is). Weekly / monthly
+   candles need a lot of history: 60 weekly candles is over a year of bars, so use a smaller lookback for them.
    **Session Statmap remembers sessions:** once you've scrolled back far enough, it keeps every completed
    session it has seen (one row each: start, open, high, low, close) and adds them back when Tradovate redraws
    the chart with fewer bars (timeframe change, jumping to the latest bar). The panel's "Sessions" row shows

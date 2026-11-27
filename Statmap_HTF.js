@@ -69,6 +69,39 @@ function quantile(a, q) {
 const pct = (a) => a.length ? (100 * a.filter(Boolean).length / a.length).toFixed(0) + "%" : "–";
 const DASH = { Solid: 1, Dashed: 3, Dotted: 5 };
 
+// Candle memory. Tradovate drops older bars when the chart is redrawn (timeframe change, jumping back to the
+// latest bar), so completed candles are remembered here per timeframe - one row per candle: key, slot, open,
+// high, low, close - and added back in front of whatever the chart has loaded. Kept while Tradovate stays open,
+// and in the browser's storage when it's available, so scrolling back once is enough.
+const MEMORY = {};
+function memoryFor(key) {
+    if (!MEMORY[key]) {
+        MEMORY[key] = new Map();
+        try {
+            const raw = typeof localStorage !== "undefined" && localStorage.getItem("statmapHTF:" + key);
+            if (raw) for (const r of JSON.parse(raw)) MEMORY[key].set(r[0], r);
+        } catch (e) { }
+    }
+    return MEMORY[key];
+}
+function saveMemory(key, keep) {
+    try {
+        if (typeof localStorage === "undefined") return;
+        const rows = [...MEMORY[key].values()].sort((x, y) => x[0] - y[0]).slice(-keep);
+        localStorage.setItem("statmapHTF:" + key, JSON.stringify(rows));
+    } catch (e) { }
+}
+// is this bar the first minute of its candle? (a chart that starts mid-candle has the wrong open for it)
+function candleStart(tf, k) {
+    switch (tf) {
+        case "1H": return k.sm % 60 === 0;
+        case "4H": return k.sm === Math.min(Math.floor(k.sm / 240), 5) * 240;
+        case "1D": return k.sm === 0;
+        case "1W": return k.sm === 0 && k.tradeDay === k.week;
+    }
+    return false;
+}
+
 class StatmapHTF {
     init() {
         applyDefaults(this);
@@ -76,7 +109,23 @@ class StatmapHTF {
         this.done = -1;
         this.tfs = [[p.tf1, p.col1], [p.tf2, p.col2], [p.tf3, p.col3], [p.tf4, p.col4]]
             .filter(([tf]) => tf !== "None")
-            .map(([tf, col]) => ({ tf, col, cur: null, prior: null, hist: {}, stats: { Mu: [], Md: [], Du: [], Dd: [], eitherM: [], bothM: [], prior: [] } }));
+            .map(([tf, col]) => ({ tf, col, cur: null, prior: null, hist: {}, stats: { Mu: [], Md: [], Du: [], Dd: [], eitherM: [], bothM: [], prior: [] },
+                nChart: 0, nMem: 0, dirty: false }));
+        const prod = String((this.contractInfo && this.contractInfo.product) || "");
+        for (const T of this.tfs) { T.memKey = prod + ":" + T.tf; T.mem = memoryFor(T.memKey); }
+        this.keep = Math.max(600, p.histCandles + p.statN + 50);
+    }
+
+    // before the first chart bar: replay remembered candles older than the chart's first candle (and that candle
+    // itself when it's remembered in full - the chart usually starts partway through it)
+    replayMemory(T, firstKey) {
+        if (!this.props.useMemory) return;
+        const rows = [...T.mem.values()].filter(r => r[0] <= firstKey).sort((x, y) => x[0] - y[0]).slice(-(this.props.histCandles + this.props.statN));
+        for (const [key, slot, o, h, l, c] of rows) {
+            const C = { key, slot, o, h, l, c, bi: NaN, lv: this.levels(T, slot, o), remembered: true };
+            this.closeCandle(T, C); T.nMem++;
+            if (key === firstKey) T.coveredKey = key;
+        }
     }
 
     history(T, slot) {                       // arrays the levels are built from
@@ -125,6 +174,10 @@ class StatmapHTF {
             for (const a of [H.manip, H.dist, H.hi, H.lo]) if (a.length > p.histCandles) a.shift();
         }
         T.prior = c;
+        if (!c.remembered) {                                                 // remember candles read off the chart
+            if (!T.mem.has(c.key)) T.dirty = true;
+            T.mem.set(c.key, [c.key, c.slot, c.o, c.h, c.l, c.c]); T.nChart++;
+        }
     }
 
     commit(e, i) {
@@ -132,14 +185,24 @@ class StatmapHTF {
         const o = e.open(), h = e.high(), l = e.low(), cl = e.close();
         for (const T of this.tfs) {
             const [key, slot] = candleKey(T.tf, k);
-            if (T.cur && T.cur.key !== key) { this.closeCandle(T, T.cur); T.cur = null; }
-            if (!T.cur) T.cur = { key, slot, o, h, l, c: cl, bi: i, lv: this.levels(T, slot, o) };
+            if (i === 0) this.replayMemory(T, key);
+            if (T.cur && T.cur.key !== key) {
+                if (T.cur.key === T.coveredKey) { if (T.prior && T.prior.key === T.cur.key) T.prior.bi = T.cur.bi; }   // already replayed
+                else if (!T.cur.partial) this.closeCandle(T, T.cur);
+                T.cur = null;
+            }
+            if (!T.cur) T.cur = { key, slot, o, h, l, c: cl, bi: i, lv: this.levels(T, slot, o), partial: i === 0 && !candleStart(T.tf, k) };
             else { T.cur.h = Math.max(T.cur.h, h); T.cur.l = Math.min(T.cur.l, l); T.cur.c = cl; }
         }
         this.done = i;
     }
 
     map(d, index, series) {
+        // Tradovate may load more history without restarting the indicator: if the first bar or the bar order
+        // changes, start again from scratch on the new bars
+        const t0 = series.size() ? series.get(0).timestamp().getTime() : 0;
+        if (this.t0 !== undefined && (t0 !== this.t0 || index < this.done)) this.init();
+        this.t0 = t0;
         for (let k = this.done + 1; k < index; k++) this.commit(series.get(k), k);
         if (index !== series.size() - 1) return {};
         // the forming bar may open a new candle: preview it so its levels show immediately
@@ -161,8 +224,11 @@ class StatmapHTF {
                 { x: du(x1), y: du(Math.max(a, b)) }, { x: du(x2), y: du(Math.max(a, b)) }, { x: du(x2), y: du(Math.min(a, b)) }, { x: du(x1), y: du(Math.min(a, b)) }] }],
                 fillStyle: { color: col, opacity: p.shadeOpacity } });
         };
-        const panel = [];
+        const panel = [], counts = [];
+        for (const T of this.tfs) if (T.dirty) { saveMemory(T.memKey, this.keep); T.dirty = false; }
         this.tfs.forEach((T, n) => {
+            const nH = this.history(T, "all").manip.length;
+            counts.push(T.tf + ": " + T.nChart + " from chart + " + T.nMem + " remembered" + (p.likeForLike ? "" : nH < p.histCandles ? "  - only " + nH + " of " + p.histCandles + ", scroll the chart back" : ""));
             let C = T.cur;
             const [key, slot] = candleKey(T.tf, k);
             if (C && C.key !== key) C = { key, slot, o: d.open(), h: d.high(), l: d.low(), bi: i, lv: this.levels(T, slot, d.open()) };  // new candle on the live bar
@@ -193,7 +259,7 @@ class StatmapHTF {
             }
             // prior candle's untested levels
             const P = T.cur && T.cur.key !== key ? T.cur : T.prior;
-            if (p.showPrior && P && P.lv) {
+            if (p.showPrior && P && P.lv && isFinite(P.bi)) {
                 for (const [lv, up, nm] of [["Mu", true, "-M"], ["Md", false, "+M"], ["Du", true, "+D"], ["Dd", false, "-D"]]) {
                     const untested = up ? P.h < P.lv[lv] : P.l > P.lv[lv];
                     if (untested) line("p" + lv + n, P.bi, x2, P.lv[lv], p.colPrior, "Dashed", 1, "prior " + nm + " " + tf);
@@ -209,6 +275,7 @@ class StatmapHTF {
             const rows = [pad("TF", 18) + pad("-M", 6) + pad("+M", 6) + pad("+D", 6) + pad("-D", 6) + pad("either M", 10) + pad("both M", 8) + pad("prior untested", 16) + "now"]
                 .concat(panel.map(r => pad(r[0], 18) + pad(r[1], 6) + pad(r[2], 6) + pad(r[3], 6) + pad(r[4], 6) + pad(r[5], 10) + pad(r[6], 8) + pad(r[7], 16) + r[8]));
             rows.push("hit rate = level reached inside its own candle; prior = prior candle's unreached levels hit in the next one");
+            for (const c of counts) rows.push("Candles  " + c);
             rows.forEach((t, k2) => items.push({ tag: "Text", key: "P" + k2, global: true, origin: { cs: "frame", h: p.panelLeft ? "left" : "right", v: p.panelTop ? "top" : "bottom" },
                 point: { x: px(p.panelLeft ? 10 : -10), y: px(p.panelTop ? 14 + k2 * (p.panelFont + 5) : -(14 + (rows.length - 1 - k2) * (p.panelFont + 5))) },
                 text: t, style: { fontSize: p.panelFont, fill: k2 === 0 ? p.colPanelHead : p.colPanel, fontFamily: "monospace, Courier New" },
@@ -232,7 +299,7 @@ module.exports = {
     params: {
         tf1: S.enum(TFO, "4H"), col1: S.color("#ff5252"), tf2: S.enum(TFO, "None"), col2: S.color("#448aff"),
         tf3: S.enum(TFO, "None"), col3: S.color("#ffab40"), tf4: S.enum(TFO, "None"), col4: S.color("#69f0ae"),
-        histCandles: S.number(60, 1, 1), likeForLike: S.bool(false), showPrior: S.bool(true), colPrior: S.color("#9e9e9e"),
+        histCandles: S.number(60, 1, 1), useMemory: S.bool(true), likeForLike: S.bool(false), showPrior: S.bool(true), colPrior: S.color("#9e9e9e"),
         useQuantiles: S.bool(true), qManipLow: S.number(25, 5, 0), qManipHigh: S.number(75, 5, 0), qDistLow: S.number(25, 5, 0), qDistHigh: S.number(75, 5, 0),
         colQuant: S.color("#b388ff"), styQuant: S.enum(STY, "Dashed"),
         showAnchor: S.bool(true), colAnchor: S.color("#9e9e9e"),
