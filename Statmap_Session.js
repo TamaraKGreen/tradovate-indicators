@@ -55,6 +55,29 @@ const DASH = { Solid: 1, Dashed: 3, Dotted: 5 };
 const SESS = { rth: ["New York RTH", "0930", "1600"], fut: ["New York Futures", "0800", "1700"], lon: ["London", "0200", "0800"],
     asia: ["Asia", "1900", "0200"], mid: ["Midnight to 5pm", "0000", "1700"] };
 
+// Session memory. Tradovate drops older bars when the chart is redrawn (timeframe change, jumping back to the
+// latest bar), so completed sessions are remembered here - one row per session: start time, open, high, low,
+// close - and added back in front of whatever the chart has loaded. Kept for as long as Tradovate stays open, and
+// in the browser's storage when it's available, so scrolling back once is enough.
+const MEMORY = {};
+function memoryFor(key) {
+    if (!MEMORY[key]) {
+        MEMORY[key] = new Map();
+        try {
+            const raw = typeof localStorage !== "undefined" && localStorage.getItem("statmapSession:" + key);
+            if (raw) for (const r of JSON.parse(raw)) MEMORY[key].set(r[0], r);
+        } catch (e) { }
+    }
+    return MEMORY[key];
+}
+function saveMemory(key) {
+    try {
+        if (typeof localStorage === "undefined") return;
+        const rows = [...MEMORY[key].values()].sort((x, y) => x[0] - y[0]).slice(-600);
+        localStorage.setItem("statmapSession:" + key, JSON.stringify(rows));
+    } catch (e) { }
+}
+
 class StatmapSession {
     init() {
         applyDefaults(this);
@@ -71,6 +94,16 @@ class StatmapSession {
         this.cnt = { am: 0, bm: 0, ad: 0, bd: 0 };
         this.stats = { Mu: [], Md: [], Du: [], Dd: [], prior: [] };
         this.lv = null;
+        const prod = String((this.contractInfo && this.contractInfo.product) || "");
+        this.memKey = prod + ":" + a + "-" + b; this.mem = memoryFor(this.memKey);
+        this.nMem = 0; this.nChart = 0; this.memDirty = false;
+    }
+
+    // before the first chart bar: replay remembered sessions that started before the chart's history begins
+    replayMemory(t0) {
+        if (!this.props.useMemory) return;
+        const rows = [...this.mem.values()].filter(r => r[0] < t0).sort((x, y) => x[0] - y[0]).slice(-Math.max(this.props.histSessions, this.props.statN) - 5);
+        for (const [t, o, h, l, c] of rows) { this.endSession({ o, h, l, c, t, bi: NaN, lv: this.levelsFrom(o), remembered: true }); this.nMem++; }
     }
 
     inSession(mod) { return this.a < this.b ? mod >= this.a && mod < this.b : mod >= this.a || mod < this.b; }
@@ -116,6 +149,11 @@ class StatmapSession {
             }
         }
         this.prior = S;
+        if (!S.remembered && S.aligned && isFinite(S.t)) {                   // remember sessions read off the chart
+            if (!this.mem.has(S.t)) this.memDirty = true;
+            this.mem.set(S.t, [S.t, S.o, S.h, S.l, S.c]);
+        }
+        if (!S.remembered) this.nChart++;
     }
 
     // which session a bar belongs to: its New York date, +1 for the evening part of an overnight session.
@@ -127,9 +165,10 @@ class StatmapSession {
         const ms = e.timestamp().getTime(), mod = nyMod(ms);
         const inS = this.inSession(mod), sid = inS ? this.sessId(ms, mod) : null;
         const xi = typeof e.index === "function" ? e.index() : i;
+        if (i === 0) this.replayMemory(ms);
         const fresh = inS && (!this.inS || !this.cur || this.cur.sid !== sid);
         if (this.cur && (!inS || fresh)) { if (!this.cur.partial) this.endSession(this.cur); this.cur = null; }
-        if (fresh) this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: xi, sid, lv: this.levelsFrom(e.open()),
+        if (fresh) this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: xi, sid, t: ms, aligned: mod === this.a, lv: this.levelsFrom(e.open()),
             partial: i === 0 && mod !== this.a };                            // history starts mid-session: wrong open, skip it
         else if (inS && this.cur) { this.cur.h = Math.max(this.cur.h, e.high()); this.cur.l = Math.min(this.cur.l, e.low()); this.cur.c = e.close(); }
         this.inS = inS;
@@ -168,7 +207,8 @@ class StatmapSession {
                 { x: du(x1), y: du(Math.max(a, b)) }, { x: du(x2), y: du(Math.max(a, b)) }, { x: du(x2), y: du(Math.min(a, b)) }, { x: du(x1), y: du(Math.min(a, b)) }] }],
                 fillStyle: { color: col, opacity: p.shadeOpacity } });
         };
-        if (S && S.lv) {
+        if (this.memDirty) { saveMemory(this.memKey); this.memDirty = false; }
+        if (S && S.lv && isFinite(S.bi)) {
             const L = S.lv, x1 = S.bi, x2 = p.extendToNow ? Math.max(S.bi + p.projOffset, i + 2) : S.bi + p.projOffset;
             if (p.showAnchor) {
                 items.push({ tag: "LineSegments", key: "A", global: true, lines: [{ tag: "Line", a: { x: du(x1), y: du(L.eD) }, b: { x: du(x1), y: du(L.eU) } }],
@@ -191,7 +231,7 @@ class StatmapSession {
                 shade("du", L.Du, L.mDu, p.colDist, x1, x2); shade("dd", L.Dd, L.mDd, p.colDist, x1, x2);
             }
             const P = S === this.prior ? null : this.prior;
-            if (p.showPrior && P && P.lv) {
+            if (p.showPrior && P && P.lv && isFinite(P.bi)) {
                 for (const [lv, up, nm] of [["Mu", true, "-M"], ["Md", false, "+M"], ["Du", true, "+D"], ["Dd", false, "-D"]]) {
                     if (up ? P.h < P.lv[lv] : P.l > P.lv[lv]) line("p" + lv, P.lv[lv], p.colPrior, "Dashed", 1, "prior " + nm, P.bi, x2);
                 }
@@ -211,7 +251,7 @@ class StatmapSession {
                 pad("Avg Session Range", 34) + (isFinite(mean(rng)) ? mean(rng).toFixed(2) : "–") + (isFinite(z) ? "   last z " + z.toFixed(2) : ""),
                 pad("Hit rate -M / +M / +D / -D", 34) + [r(this.stats.Mu), r(this.stats.Md), r(this.stats.Du), r(this.stats.Dd)].join(" / ") + "  (" + this.stats.Mu.length + ")",
                 pad("Prior untested levels hit next", 34) + r(this.stats.prior) + "  (" + this.stats.prior.length + ")",
-                pad("Chart bars loaded", 34) + (this.nBars || 0) + "   sessions found " + n];
+                pad("Sessions", 34) + this.nChart + " from chart (" + (this.nBars || 0) + " bars) + " + this.nMem + " remembered"];
             if (!n) rows.push("No completed session in the loaded history yet - scroll the chart back to load more");
             else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions loaded - scroll the chart back until it reaches " + p.histSessions);
             rows.forEach((t, k) => items.push({ tag: "Text", key: "P" + k, global: true, origin: { cs: "frame", h: p.tableLeft ? "left" : "right", v: p.tableTop ? "top" : "bottom" },
@@ -237,7 +277,7 @@ module.exports = {
     tags: ["Custom"],
     params: {
         session: S.enum(SO, "rth"), startHour: S.number(9, 1, 0), startMinute: S.number(0, 5, 0), endHour: S.number(12, 1, 0), endMinute: S.number(0, 5, 0),
-        histSessions: S.number(60, 1, 1),
+        histSessions: S.number(60, 1, 1), useMemory: S.bool(true),
         showAnchor: S.bool(true), colAnchor: S.color("#9e9e9e"),
         showOpen: S.bool(true), colOpen: S.color("#bdbdbd"), styOpen: S.enum(STY, "Solid"),
         showManip: S.bool(true), colManip: S.color("#ef5350"), styManip: S.enum(STY, "Dotted"),
