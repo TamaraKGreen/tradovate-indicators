@@ -13,18 +13,10 @@
    The Statmaps work on 1-minute to 15-minute charts.
 4. Load enough history: the FVG percentiles need ~40 zones per timeframe, the 200 EMA ~200 bars,
    Statmap lookbacks N candles of the chosen timeframe (60 x 4H = ~10 trading days of 1m bars).
-   **Session Statmap carries its own history:** the preset sessions (Asia, London, NY RTH, NY Futures,
-   Midnight-5pm, Globex Day 18:00-16:00, and custom sessions with the same times) include the last 300 NQ
-   sessions built in, so the levels are right even when Tradovate loads only a few days. The built-in
-   history is **NQ only** (used on NQ and MNQ charts); on any other product the indicator uses the chart's
-   own history. Newer sessions on
-   the chart are added on top automatically. Set *Stats Source* to "Chart history only" to ignore it. The
-   built-in history is refreshed with `dev/build_session_history.py` (see the top of that file). The chart
-   has to reach back to where the built-in history ends; if it doesn't (e.g. a chart that loads 3 days and a
-   built-in history a week old), the panel says which dates are missing - refresh the history and re-paste.
-   **Otherwise the Statmaps draw no levels until at least one full session / candle has finished inside the
-   loaded history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
-   if it says 0, scroll the chart left (Tradovate loads more history as you scroll) and the levels appear.
+   **The Statmaps draw no levels until at least one full session / candle has finished inside the loaded
+   history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
+   if it's below the lookback, **double-click a candle on the chart and raise the number of bars loaded**
+   (e.g. 75 Asia sessions needs ~7,000 bars on a 15-minute chart, ~21,000 on a 5-minute chart).
 5. Session Statmap, **Custom** session: set *Start Hour / Start Minute / End Hour / End Minute*
    (New York time, 24-hour clock, e.g. 9 / 30 / 11 / 0 for 09:30-11:00; overnight sessions like
    20:00-02:00 work). The hour boxes also accept HHMM, so Start Hour 1800 and End Hour 1600 means
