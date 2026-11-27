@@ -21,12 +21,32 @@
 const predef = require("./tools/predef");
 const { du, op, px } = require("./tools/graphics");
 
+// Settings saved on a chart before an update can come through blank for new or changed inputs; fall back to
+// each input's default (and turn numeric text into numbers) so an updated indicator still works without re-adding.
+function withDefaults(props, params) {
+    const out = {};
+    for (const k of Object.keys(params)) {
+        const def = params[k].def; let v = props ? props[k] : undefined;
+        if (v === undefined || v === null || v === "" || (typeof def === "number" && !isFinite(Number(v)))) v = def;
+        else if (typeof def === "number") v = Number(v);
+        out[k] = v;
+    }
+    return out;
+}
+function applyDefaults(self) {
+    const merged = withDefaults(self.props, module.exports.params);
+    try { self.props = merged; } catch (e) { for (const k of Object.keys(merged)) { try { self.props[k] = merged[k]; } catch (e2) { } } }
+}
+
+
 function nthSundayUTC(y, m, n) { const f = new Date(Date.UTC(y, m, 1)).getUTCDay(); return 1 + ((7 - f) % 7) + 7 * (n - 1); }
 function nyOffsetH(ms) {
     const y = new Date(ms).getUTCFullYear();
     return ms >= Date.UTC(y, 2, nthSundayUTC(y, 2, 2), 7) && ms < Date.UTC(y, 10, nthSundayUTC(y, 10, 1), 6) ? -4 : -5;
 }
 function nyMod(ms) { const t = new Date(ms + nyOffsetH(ms) * 3600000); return t.getUTCHours() * 60 + t.getUTCMinutes(); }
+// hour box accepts an hour (18) or HHMM (1800 / 930); the minute box is added to a plain hour
+const toMin = (hour, minute) => { let h = Math.floor(Number(hour)) || 0, m = Math.floor(Number(minute)) || 0; if (h >= 100) { m = h % 100; h = Math.floor(h / 100); } return (h % 24) * 60 + (m % 60); };
 const hhmm = s => { const v = parseInt(String(s).replace(":", ""), 10); return Math.floor(v / 100) * 60 + (v % 100); };
 const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : NaN;
 const median = a => { if (!a.length) return NaN; const s = a.slice().sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
@@ -37,9 +57,10 @@ const SESS = { rth: ["New York RTH", "0930", "1600"], fut: ["New York Futures", 
 
 class StatmapSession {
     init() {
+        applyDefaults(this);
         const p = this.props;
         let name, a, b;
-        if (p.session === "custom") { name = "Custom"; a = (p.startHour % 24) * 60 + (p.startMinute % 60); b = (p.endHour % 24) * 60 + (p.endMinute % 60); }
+        if (p.session === "custom") { name = "Custom"; a = toMin(p.startHour, p.startMinute); b = toMin(p.endHour, p.endMinute); }
         else if (p.session === "auto") {
             const m = nyMod(Date.now());                                    // same branch order as the Pine
             [name, a, b] = m < 1020 ? ["Midnight to 5pm", 0, 1020] : (m >= 1140 || m < 120) ? ["Asia", 1140, 120] : ["New York RTH", 570, 960];

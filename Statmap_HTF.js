@@ -20,6 +20,24 @@
 const predef = require("./tools/predef");
 const { du, op, px } = require("./tools/graphics");
 
+// Settings saved on a chart before an update can come through blank for new or changed inputs; fall back to
+// each input's default (and turn numeric text into numbers) so an updated indicator still works without re-adding.
+function withDefaults(props, params) {
+    const out = {};
+    for (const k of Object.keys(params)) {
+        const def = params[k].def; let v = props ? props[k] : undefined;
+        if (v === undefined || v === null || v === "" || (typeof def === "number" && !isFinite(Number(v)))) v = def;
+        else if (typeof def === "number") v = Number(v);
+        out[k] = v;
+    }
+    return out;
+}
+function applyDefaults(self) {
+    const merged = withDefaults(self.props, module.exports.params);
+    try { self.props = merged; } catch (e) { for (const k of Object.keys(merged)) { try { self.props[k] = merged[k]; } catch (e2) { } } }
+}
+
+
 function nthSundayUTC(y, m, n) { const f = new Date(Date.UTC(y, m, 1)).getUTCDay(); return 1 + ((7 - f) % 7) + 7 * (n - 1); }
 function nyOffsetH(ms) {
     const y = new Date(ms).getUTCFullYear();
@@ -53,6 +71,7 @@ const DASH = { Solid: 1, Dashed: 3, Dotted: 5 };
 
 class StatmapHTF {
     init() {
+        applyDefaults(this);
         const p = this.props;
         this.done = -1;
         this.tfs = [[p.tf1, p.col1], [p.tf2, p.col2], [p.tf3, p.col3], [p.tf4, p.col4]]

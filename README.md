@@ -18,7 +18,12 @@
    if it says 0, scroll the chart left (Tradovate loads more history as you scroll) and the levels appear.
 5. Session Statmap, **Custom** session: set *Start Hour / Start Minute / End Hour / End Minute*
    (New York time, 24-hour clock, e.g. 9 / 30 / 11 / 0 for 09:30-11:00; overnight sessions like
-   20:00-02:00 work).
+   20:00-02:00 work). The hour boxes also accept HHMM, so Start Hour 1800 and End Hour 1600 means
+   18:00-16:00.
+6. **After pasting an updated version over an indicator that's already on a chart**, check its settings:
+   Tradovate keeps the old saved values, and inputs that are new in the update may start blank. The
+   indicators fall back to the defaults for blank inputs, so set the new ones (or remove and re-add the
+   indicator).
 
 ## If something doesn't draw: `dev/Layout_Test.js`
 A small diagnostic indicator. Load it like the others and send a screenshot: it shows which text

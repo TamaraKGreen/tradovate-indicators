@@ -18,6 +18,24 @@
 const predef = require("./tools/predef");
 const { du, op, px } = require("./tools/graphics");
 
+// Settings saved on a chart before an update can come through blank for new or changed inputs; fall back to
+// each input's default (and turn numeric text into numbers) so an updated indicator still works without re-adding.
+function withDefaults(props, params) {
+    const out = {};
+    for (const k of Object.keys(params)) {
+        const def = params[k].def; let v = props ? props[k] : undefined;
+        if (v === undefined || v === null || v === "" || (typeof def === "number" && !isFinite(Number(v)))) v = def;
+        else if (typeof def === "number") v = Number(v);
+        out[k] = v;
+    }
+    return out;
+}
+function applyDefaults(self) {
+    const merged = withDefaults(self.props, module.exports.params);
+    try { self.props = merged; } catch (e) { for (const k of Object.keys(merged)) { try { self.props[k] = merged[k]; } catch (e2) { } } }
+}
+
+
 // ───────────────────────────── New York clock ─────────────────────────────
 function nthSundayUTC(y, m, n) {                       // m: 0-11
     const first = new Date(Date.UTC(y, m, 1)).getUTCDay();
@@ -87,6 +105,7 @@ function maNext(m, x, commit) {                               // returns the val
 // ───────────────────────────── calculator ─────────────────────────────
 class FvgIfvgKl {
     init() {
+        applyDefaults(this);
         const p = this.props;
         this.done = -1;                    // last committed (closed) chart bar
         this.prev = null;                  // last committed bar + its clock
