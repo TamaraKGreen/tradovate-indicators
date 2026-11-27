@@ -13,8 +13,13 @@
    The Statmaps work on 1-minute to 15-minute charts.
 4. Load enough history: the FVG percentiles need ~40 zones per timeframe, the 200 EMA ~200 bars,
    Statmap lookbacks N candles of the chosen timeframe (60 x 4H = ~10 trading days of 1m bars).
-   **The Statmaps draw no levels until at least one full session / candle has finished inside the loaded
-   history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
+   **Session Statmap carries its own history:** the preset sessions (Asia, London, NY RTH, NY Futures,
+   Midnight-5pm, Globex Day 18:00-16:00, and custom sessions with the same times) include the last 300 NQ
+   sessions built in, so the levels are right even when Tradovate loads only a few days. Newer sessions on
+   the chart are added on top automatically. Set *Stats Source* to "Chart history only" to ignore it. The
+   built-in history is refreshed with `dev/build_session_history.py` (see the top of that file).
+   **Otherwise the Statmaps draw no levels until at least one full session / candle has finished inside the
+   loaded history.** Their panel shows "Chart bars loaded ... sessions found ..." so you can see what they have;
    if it says 0, scroll the chart left (Tradovate loads more history as you scroll) and the levels appear.
 5. Session Statmap, **Custom** session: set *Start Hour / Start Minute / End Hour / End Minute*
    (New York time, 24-hour clock, e.g. 9 / 30 / 11 / 0 for 09:30-11:00; overnight sessions like
