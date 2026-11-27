@@ -118,19 +118,30 @@ class StatmapSession {
         this.prior = S;
     }
 
+    // which session a bar belongs to: its New York date, +1 for the evening part of an overnight session.
+    // A new session starts when this changes, so a holiday halt with no bars between sessions (e.g. Thanksgiving,
+    // trading stops 13:00 and restarts 18:00) still ends one session and starts the next.
+    sessId(ms, mod) { const day = Math.floor((ms + nyOffsetH(ms) * 3600000) / 86400000); return this.a > this.b && mod >= this.a ? day + 1 : day; }
+
     commit(e, i) {
-        const mod = nyMod(e.timestamp().getTime());
-        const inS = this.inSession(mod);
+        const ms = e.timestamp().getTime(), mod = nyMod(ms);
+        const inS = this.inSession(mod), sid = inS ? this.sessId(ms, mod) : null;
         const xi = typeof e.index === "function" ? e.index() : i;
-        if (inS && !this.inS) this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: xi, lv: this.levelsFrom(e.open()),
+        const fresh = inS && (!this.inS || !this.cur || this.cur.sid !== sid);
+        if (this.cur && (!inS || fresh)) { if (!this.cur.partial) this.endSession(this.cur); this.cur = null; }
+        if (fresh) this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: xi, sid, lv: this.levelsFrom(e.open()),
             partial: i === 0 && mod !== this.a };                            // history starts mid-session: wrong open, skip it
         else if (inS && this.cur) { this.cur.h = Math.max(this.cur.h, e.high()); this.cur.l = Math.min(this.cur.l, e.low()); this.cur.c = e.close(); }
-        if (!inS && this.inS && this.cur) { if (!this.cur.partial) this.endSession(this.cur); this.cur = null; }
         this.inS = inS;
         this.done = i; this.nBars = i + 1;
     }
 
     map(d, index, series) {
+        // Tradovate may load more history (e.g. after raising the bars to load) without restarting the indicator:
+        // if the first bar or the bar order changes, start again from scratch on the new bars
+        const t0 = series.size() ? series.get(0).timestamp().getTime() : 0;
+        if (this.t0 !== undefined && (t0 !== this.t0 || index < this.done)) this.init();
+        this.t0 = t0;
         for (let k = this.done + 1; k < index; k++) this.commit(series.get(k), k);
         if (index !== series.size() - 1) return {};
         return { graphics: { items: this.draw(typeof d.index === "function" ? d.index() : index, d) } };
@@ -141,7 +152,9 @@ class StatmapSession {
         const mod = nyMod(d.timestamp().getTime());
         // the session shown is the running one, or the last completed one when outside it
         let S = this.cur;
-        if (!S && this.inSession(mod) && !this.inS) S = { o: d.open(), h: d.high(), l: d.low(), bi: i, lv: this.levelsFrom(d.open()) };
+        const nowMs = d.timestamp().getTime();
+        if (this.inSession(mod) && (!S || S.sid !== this.sessId(nowMs, mod)))   // live bar opens a new session
+            S = { o: d.open(), h: d.high(), l: d.low(), bi: i, sid: this.sessId(nowMs, mod), lv: this.levelsFrom(d.open()) };
         if (!S) S = this.prior;
         const line = (key, y, col, sty, w, txt, x1, x2) => {
             if (!isFinite(y)) return;
