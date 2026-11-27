@@ -155,6 +155,7 @@ class StatmapSession {
             // a session already in the built-in history: don't count it twice, but remember where it is on the chart
             const covered = t <= this.lastBuiltin + 3600000;
             if (covered) { const B = this.builtin.find(x => Math.abs(x.t - t) <= 3600000); if (B) B.bi = xi; }
+            if (!covered && this.firstChart === undefined) this.firstChart = t;      // first session newer than the built-in
             this.cur = { o: e.open(), h: e.high(), l: e.low(), c: e.close(), bi: xi, t, lv: this.levelsFrom(e.open()), covered,
                 partial: i === 0 && mod !== this.a };                        // history starts mid-session: wrong open, skip it
         }
@@ -237,7 +238,11 @@ class StatmapSession {
                 pad("Prior untested levels hit next", 34) + r(this.stats.prior) + "  (" + this.stats.prior.length + ")",
                 pad("History", 34) + (this.builtin.length ? "built-in to " + nyDate(this.lastBuiltin) + " + " + this.nChart + " from chart" : this.nChart + " sessions from chart (" + (this.nBars || 0) + " bars)")];
             if (!n) rows.push("No completed session in the loaded history yet - scroll the chart left to load more days");
-            else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions available" + (this.builtin.length ? "" : " - scroll left to load more, or use a preset session with built-in history"));
+            if (this.builtin.length && this.firstChart !== undefined && this.firstChart - this.lastBuiltin > 4 * 86400000)
+                rows.push("Gap: sessions between " + nyDate(this.lastBuiltin) + " and " + nyDate(this.firstChart) + " are missing - refresh the built-in history");
+            else if (this.builtin.length && this.firstChart === undefined && (this.nBars || 0) > 0 && d.timestamp().getTime() - this.lastBuiltin > 4 * 86400000)
+                rows.push("Built-in history ends " + nyDate(this.lastBuiltin) + " - refresh it (sessions since then aren't on the chart)");
+            if (!n) {} else if (n < p.histSessions) rows.push("Only " + n + " of " + p.histSessions + " sessions available" + (this.builtin.length ? "" : " - scroll left to load more, or use a preset session with built-in history"));
             rows.forEach((t, k) => items.push({ tag: "Text", key: "P" + k, global: true, origin: { cs: "frame", h: p.tableLeft ? "left" : "right", v: p.tableTop ? "top" : "bottom" },
                 point: { x: px(p.tableLeft ? 10 : -10), y: px(p.tableTop ? 14 + k * (p.tableFont + 5) : -(14 + (rows.length - 1 - k) * (p.tableFont + 5))) },
                 text: t, style: { fontSize: p.tableFont, fill: k === 0 ? p.colTableHead : p.colTable, fontFamily: "monospace, Courier New" },
